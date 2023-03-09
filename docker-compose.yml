@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  web:
+    restart: always
+    build:
+      context: .
+      dockerfile: ./compose/local/django/Dockerfile
+    image: web_signcloud
+    command: /start
+    volumes:
+      - .:/app
+    ports:
+      - 8000:8000
+    env_file:
+      - ./.env
+    depends_on:
+      - redis
+      - db
+    networks:
+      - signscloud
+  db:
+    image: mariadb
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: signscloud
+      MYSQL_USER: divel
+      MYSQL_PASSWORD: 09071997
+    volumes:
+      - data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    networks:
+      - signscloud
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - 6379:6379
+    networks:
+    - signscloud
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: ./compose/local/django/Dockerfile
+    image: celery_signcloud
+    command: /start-celeryworker
+    volumes:
+      - .:/app
+    env_file:
+      - ./.env
+    depends_on:
+      - redis
+      - db
+    networks:
+      - signscloud
+  fake-email:
+   image: reachfive/fake-smtp-server
+   depends_on:
+    - web
+    - db
+   networks:
+    - signscloud
+   ports:
+     - 1080:1080
+     - 1025:1025
+     
+  celery_beat:
+    build:
+      context: .
+      dockerfile: ./compose/local/django/Dockerfile
+    image: celery_beat_signcloud
+    command: /start-celerybeat
+    volumes:
+      - .:/app
+    env_file:
+      - ./.env
+    depends_on:
+      - redis
+      - db
+    networks:
+      - signscloud
+
+  flower:
+    build:
+      context: .
+      dockerfile: ./compose/local/django/Dockerfile
+    image: celery_flower_signscloud
+    command: /start-flower
+    volumes:
+      - .:/app
+    env_file:
+      - ./.env
+    ports:
+      - 5557:5555
+    depends_on:
+      - redis
+      - db
+    links:
+      - redis
+    networks:
+      - signscloud
+
+volumes:
+  data:
+networks:
+  signscloud:
+    driver: bridge
